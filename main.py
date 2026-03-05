@@ -4,7 +4,6 @@ import os
 from dotenv import load_dotenv
 import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
-
 from fastapi import HTTPException
 from pydantic import BaseModel
 
@@ -130,40 +129,30 @@ def verificar_nf(chave_nf: str):
         return {"erro": str(e)}
 
 @app.post("/nf-salvar")
-def salvar_nf(dados: NotaQR):
+def salvar_nf(nota: NotaQR):
+
+    conn = get_connection()
+    cursor = conn.cursor()
 
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
 
-        # verifica duplicidade
-        cursor.execute(
-            "SELECT ID FROM mercado_qr_nf WHERE CHAVE_NF = %s",
-            (dados.chave_nf,)
-        )
-
-        existe = cursor.fetchone()
-
-        if existe:
-            cursor.close()
-            conn.close()
-            return {"status": "nota já existe"}
-
-        cursor.execute(
-            """
-            INSERT INTO mercado_qr_nf
-            (CHAVE_NF, PARAMETRO_QR, PROCESSADA)
+        cursor.execute("""
+            INSERT INTO mercado_qr_nf (CHAVE_NF, PARAMETRO_QR, PROCESSADA)
             VALUES (%s, %s, 'N')
-            """,
-            (dados.chave_nf, dados.parametro_qr)
-        )
+        """, (nota.chave_nf, nota.parametro_qr))
 
         conn.commit()
 
+        return {
+            "status": "salvo"
+        }
+
+    except mysql.connector.errors.IntegrityError:
+
+        return {
+            "status": "duplicado"
+        }
+
+    finally:
         cursor.close()
         conn.close()
-
-        return {"status": "nota salva"}
-
-    except Exception as e:
-        return {"erro": str(e)}
